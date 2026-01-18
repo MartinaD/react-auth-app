@@ -1,0 +1,57 @@
+# Build arguments (can be overridden during build)
+ARG NODE_IMAGE=node:18-alpine
+ARG USER_ID=1001
+ARG GROUP_ID=1001
+
+# Pull a pre-built image from Docker Hub
+FROM ${NODE_IMAGE}
+
+RUN echo "Starting the build"
+
+# Create a working directory `/app` - all commands run from here
+WORKDIR /app
+
+# Environment variables (available at runtime)
+ENV NODE_ENV=production
+ENV PORT=3001
+
+# Install curl for healthcheck and create data directory in one layer
+RUN apk add --no-cache curl && \
+    mkdir -p /app/data
+
+# Copy package files first
+COPY package.json ./
+COPY package-lock.json* ./
+COPY tsconfig.json ./
+
+# Install all dependencies; skip optional dependencies
+RUN echo "Installing dependencies..." && \
+    npm ci --omit=optional || npm install
+
+# Copy TS source files
+COPY src/ ./src/
+
+# Compile and create a dist folder with the compiled JS code
+RUN echo "Building TypeScript..." && \
+    npm run build && \
+    echo "Build complete"
+
+# Create non-root user for better security
+# Changes ownership of `/app` to nodejs
+# BusyBox syntax - create group first, then user
+RUN addgroup nodejs && \
+    adduser -D -G nodejs nodejs && \
+    chown -R nodejs:nodejs /app
+
+# Switch to non-root user
+USER nodejs
+
+# Expose port (using ENV variable)
+EXPOSE ${PORT}
+
+# Health check - tests /api/health endpoint
+HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
+  CMD curl -f http://localhost:${PORT}/api/health || exit 1
+
+# Start the compiled server
+CMD ["node", "dist/server.js"]

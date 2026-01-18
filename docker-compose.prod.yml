@@ -1,0 +1,49 @@
+version: '3.8'
+
+# Uses pre-built images from Docker Hub instead of building from source
+
+services:
+  backend:
+    # Pull from Docker Hub instead of building
+    image: bozhinovskam/react-auth-backend:latest
+    container_name: react-auth-backend
+    ports:
+      - "3001:3001"
+    labels:
+      - "com.docker.compose.service=backend"
+      - "app.url=http://localhost:3001"
+      - "app.port=3001"
+    environment:
+      - PORT=3001
+      - NODE_ENV=production
+      - DATABASE_DIR=/app/data
+      - JWT_SECRET=${JWT_SECRET:-secret-key}
+    volumes:
+      - backend-data:/app/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  frontend:
+    # Pull from Docker Hub instead of building
+    image: bozhinovskam/react-auth-frontend:latest
+    container_name: react-auth-frontend
+    ports:
+      - "80:80"
+    environment:
+      - VITE_API_URL=http://localhost:3001
+    depends_on:
+      - backend
+    restart: unless-stopped
+    labels:
+      - "com.docker.compose.service=frontend"
+      - "app.url=http://localhost:80"
+      - "app.port=80"
+
+volumes:
+  backend-data:
+

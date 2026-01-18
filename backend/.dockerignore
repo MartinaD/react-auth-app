@@ -1,0 +1,12 @@
+node_modules
+npm-debug.log
+.env
+.env.local
+*.log
+database.sqlite
+.git
+.gitignore
+README.md
+dist
+*.tsbuildinfo
+
