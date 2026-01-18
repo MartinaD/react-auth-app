@@ -7,7 +7,12 @@ pipeline {
         FRONTEND_IMAGE = 'bozhinovskam/react-auth-frontend:latest'
         
         // Nexus configuration
-        NEXUS_HOST = 'nexus:8082'
+        // Get Nexus container IP since Jenkins uses host's Docker daemon (hostname won't resolve)
+        NEXUS_IP = sh(
+            script: 'docker inspect nexus 2>/dev/null | grep -A 10 "Networks" | grep "IPAddress" | head -1 | cut -d\\" -f4 || echo "172.18.0.2"',
+            returnStdout: true
+        ).trim()
+        NEXUS_HOST = "${NEXUS_IP}:8082"
         NEXUS_REPOSITORY = 'docker-hosted'
         NEXUS_BACKEND_IMAGE = "${NEXUS_HOST}/${NEXUS_REPOSITORY}/react-auth-backend:${BUILD_NUMBER}"
         NEXUS_FRONTEND_IMAGE = "${NEXUS_HOST}/${NEXUS_REPOSITORY}/react-auth-frontend:${BUILD_NUMBER}"
@@ -63,6 +68,7 @@ pipeline {
             steps {
                 script {
                     echo "Pushing Docker images to Nexus..."
+                    echo "Using Nexus at: ${NEXUS_HOST}"
                     
                     // Try to push without login (works if anonymous push is enabled)
                     def pushResult = sh(
@@ -75,8 +81,16 @@ pipeline {
                         returnStatus: true
                     )
                     
-                    echo "Push result: ${pushResult}"
-                    echo "✅ All images pushed to Nexus: http://localhost:8081"
+                    echo "Push result (0=success, 1=failed): ${pushResult}"
+                    
+                    if (pushResult != 0) {
+                        error("Failed to push images to Nexus. Check logs above for details.")
+                    }
+                    
+                    echo "✅ All images pushed to Nexus successfully!"
+                    echo "Backend: ${NEXUS_BACKEND_IMAGE} and ${NEXUS_BACKEND_IMAGE_LATEST}"
+                    echo "Frontend: ${NEXUS_FRONTEND_IMAGE} and ${NEXUS_FRONTEND_IMAGE_LATEST}"
+                    echo "View in Nexus UI: http://localhost:8081 → Browse → docker-hosted"
                 }
             }
         }
