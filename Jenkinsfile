@@ -66,22 +66,18 @@ pipeline {
                     echo "Pushing Docker images to Nexus..."
                     echo "Using Nexus at: ${NEXUS_HOST}"
                     
-                    // Try to push without login (works if anonymous push is enabled)
-                    def pushResult = sh(
-                        script: """
-                            docker push ${NEXUS_BACKEND_IMAGE} && \
-                            docker push ${NEXUS_BACKEND_IMAGE_LATEST} && \
-                            docker push ${NEXUS_FRONTEND_IMAGE} && \
-                            docker push ${NEXUS_FRONTEND_IMAGE_LATEST}
-                        """,
-                        returnStatus: true
-                    )
+                    // Login to Nexus (required for push)
+                    sh """
+                        echo 'admin123' | docker login ${NEXUS_HOST} -u admin --password-stdin
+                    """
                     
-                    echo "Push result (0=success, 1=failed): ${pushResult}"
-                    
-                    if (pushResult != 0) {
-                        error("Failed to push images to Nexus. Check logs above for details.")
-                    }
+                    // Push all images
+                    sh """
+                        docker push ${NEXUS_BACKEND_IMAGE}
+                        docker push ${NEXUS_BACKEND_IMAGE_LATEST}
+                        docker push ${NEXUS_FRONTEND_IMAGE}
+                        docker push ${NEXUS_FRONTEND_IMAGE_LATEST}
+                    """
                     
                     echo "✅ All images pushed to Nexus successfully!"
                     echo "Backend: ${NEXUS_BACKEND_IMAGE} and ${NEXUS_BACKEND_IMAGE_LATEST}"
