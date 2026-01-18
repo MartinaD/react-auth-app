@@ -62,7 +62,9 @@ pipeline {
         stage('Push to Nexus') {
             steps {
                 script {
-                    // Works if anonymous push is enabled
+                    echo "Pushing Docker images to Nexus..."
+                    
+                    // Try to push without login (works if anonymous push is enabled)
                     def pushResult = sh(
                         script: """
                             docker push ${NEXUS_BACKEND_IMAGE} && \
@@ -73,6 +75,7 @@ pipeline {
                         returnStatus: true
                     )
                     
+                    echo "Push result: ${pushResult}"
                     echo "✅ All images pushed to Nexus: http://localhost:8081"
                 }
             }
