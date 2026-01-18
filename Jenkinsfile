@@ -66,17 +66,44 @@ pipeline {
                     echo "Pushing Docker images to Nexus..."
                     echo "Using Nexus at: ${NEXUS_HOST}"
                     
-                    // Login to Nexus (required for push)
+                    // Test connectivity first
                     sh """
-                        echo 'admin123' | docker login ${NEXUS_HOST} -u admin --password-stdin
+                        echo "Testing Nexus connectivity..."
+                        curl -v http://${NEXUS_HOST}/v2/ || echo "Warning: Cannot reach Nexus"
                     """
                     
-                    // Push all images
+                    // Try login (may fail if anonymous push works)
+                    def loginResult = sh(
+                        script: """
+                            echo 'admin123' | docker login ${NEXUS_HOST} -u admin --password-stdin 2>&1
+                        """,
+                        returnStatus: true
+                    )
+                    
+                    if (loginResult != 0) {
+                        echo "Login failed, trying anonymous push..."
+                    } else {
+                        echo "Login successful"
+                    }
+                    
+                    // Push all images (will use credentials if login succeeded, otherwise try anonymous)
                     sh """
-                        docker push ${NEXUS_BACKEND_IMAGE}
-                        docker push ${NEXUS_BACKEND_IMAGE_LATEST}
-                        docker push ${NEXUS_FRONTEND_IMAGE}
-                        docker push ${NEXUS_FRONTEND_IMAGE_LATEST}
+                        docker push ${NEXUS_BACKEND_IMAGE} || {
+                            echo "ERROR: Failed to push ${NEXUS_BACKEND_IMAGE}"
+                            exit 1
+                        }
+                        docker push ${NEXUS_BACKEND_IMAGE_LATEST} || {
+                            echo "ERROR: Failed to push ${NEXUS_BACKEND_IMAGE_LATEST}"
+                            exit 1
+                        }
+                        docker push ${NEXUS_FRONTEND_IMAGE} || {
+                            echo "ERROR: Failed to push ${NEXUS_FRONTEND_IMAGE}"
+                            exit 1
+                        }
+                        docker push ${NEXUS_FRONTEND_IMAGE_LATEST} || {
+                            echo "ERROR: Failed to push ${NEXUS_FRONTEND_IMAGE_LATEST}"
+                            exit 1
+                        }
                     """
                     
                     echo "✅ All images pushed to Nexus successfully!"
