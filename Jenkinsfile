@@ -7,12 +7,9 @@ pipeline {
         FRONTEND_IMAGE = 'bozhinovskam/react-auth-frontend:latest'
         
         // Nexus configuration
-        // Get Nexus container IP - Jenkins uses host's Docker daemon but needs container IP
-        NEXUS_IP = sh(
-            script: 'docker inspect -f "{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}" nexus 2>/dev/null || echo "127.0.0.1"',
-            returnStdout: true
-        ).trim()
-        NEXUS_HOST = "${NEXUS_IP}:8082"
+        // Use localhost since Jenkins uses host's Docker daemon
+        // Make sure localhost:8082 is in Docker Desktop's insecure-registries
+        NEXUS_HOST = "localhost:8082"
         NEXUS_REPOSITORY = 'docker-hosted'
         NEXUS_BACKEND_IMAGE = "${NEXUS_HOST}/${NEXUS_REPOSITORY}/react-auth-backend:${BUILD_NUMBER}"
         NEXUS_FRONTEND_IMAGE = "${NEXUS_HOST}/${NEXUS_REPOSITORY}/react-auth-frontend:${BUILD_NUMBER}"
@@ -25,7 +22,7 @@ pipeline {
             steps {
                 script {
                     echo "Checking out code from repository..."
-                    checkout scm
+                checkout scm
                 }
             }
         }
@@ -35,11 +32,11 @@ pipeline {
                 dir("backend") {
                     script {
                         echo "Building backend Docker image..."
-                        sh """
-                            docker build -t ${BACKEND_IMAGE} -f Dockerfile .
-                            docker tag ${BACKEND_IMAGE} ${NEXUS_BACKEND_IMAGE}
-                            docker tag ${BACKEND_IMAGE} ${NEXUS_BACKEND_IMAGE_LATEST}
-                        """
+                    sh """
+                        docker build -t ${BACKEND_IMAGE} -f Dockerfile .
+                        docker tag ${BACKEND_IMAGE} ${NEXUS_BACKEND_IMAGE}
+                        docker tag ${BACKEND_IMAGE} ${NEXUS_BACKEND_IMAGE_LATEST}
+                    """
                         echo "Backend image built successfully: ${BACKEND_IMAGE}"
                         echo "Tagged for Nexus: ${NEXUS_BACKEND_IMAGE}"
                     }
@@ -52,11 +49,11 @@ pipeline {
                 dir("frontend") {
                     script {
                         echo "Building frontend Docker image..."
-                        sh """
-                            docker build -t ${FRONTEND_IMAGE} -f Dockerfile .
-                            docker tag ${FRONTEND_IMAGE} ${NEXUS_FRONTEND_IMAGE}
-                            docker tag ${FRONTEND_IMAGE} ${NEXUS_FRONTEND_IMAGE_LATEST}
-                        """
+                    sh """
+                        docker build -t ${FRONTEND_IMAGE} -f Dockerfile .
+                        docker tag ${FRONTEND_IMAGE} ${NEXUS_FRONTEND_IMAGE}
+                        docker tag ${FRONTEND_IMAGE} ${NEXUS_FRONTEND_IMAGE_LATEST}
+                    """
                         echo "Frontend image built successfully: ${FRONTEND_IMAGE}"
                         echo "Tagged for Nexus: ${NEXUS_FRONTEND_IMAGE}"
                     }
@@ -68,46 +65,13 @@ pipeline {
             steps {
                 script {
                     echo "Pushing Docker images to Nexus..."
-                    echo "Nexus IP: ${NEXUS_IP}"
                     echo "Using Nexus at: ${NEXUS_HOST}"
                     
-                    // Verify Nexus container is running
                     sh """
-                        docker ps | grep nexus || echo "Warning: Nexus container not found"
-                    """
-                    
-                    // Try login (may fail if anonymous push works)
-                    def loginResult = sh(
-                        script: """
-                            echo 'admin123' | docker login ${NEXUS_HOST} -u admin --password-stdin 2>&1
-                        """,
-                        returnStatus: true
-                    )
-                    
-                    if (loginResult != 0) {
-                        echo "Login failed, trying anonymous push..."
-                    } else {
-                        echo "Login successful"
-                    }
-                    
-                    // Push all images (will use credentials if login succeeded, otherwise try anonymous)
-                    sh """
-                        docker push ${NEXUS_BACKEND_IMAGE} || {
-                            echo "ERROR: Failed to push ${NEXUS_BACKEND_IMAGE}"
-                            exit 1
-                        }
-                        docker push ${NEXUS_BACKEND_IMAGE_LATEST} || {
-                            echo "ERROR: Failed to push ${NEXUS_BACKEND_IMAGE_LATEST}"
-                            exit 1
-                        }
-                        docker push ${NEXUS_FRONTEND_IMAGE} || {
-                            echo "ERROR: Failed to push ${NEXUS_FRONTEND_IMAGE}"
-                            exit 1
-                        }
-                        docker push ${NEXUS_FRONTEND_IMAGE_LATEST} || {
-                            echo "ERROR: Failed to push ${NEXUS_FRONTEND_IMAGE_LATEST}"
-                            exit 1
-                        }
+                        docker push ${NEXUS_BACKEND_IMAGE}
+                        docker push ${NEXUS_BACKEND_IMAGE_LATEST}
+                        docker push ${NEXUS_FRONTEND_IMAGE}
+                        docker push ${NEXUS_FRONTEND_IMAGE_LATEST}
                     """
                     
                     echo "✅ All images pushed to Nexus successfully!"
