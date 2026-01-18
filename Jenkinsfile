@@ -67,6 +67,13 @@ pipeline {
                     echo "Pushing Docker images to Nexus..."
                     echo "Using Nexus at: ${NEXUS_HOST}"
                     
+                    // Login to Nexus
+                    sh """
+                        echo 'admin123' | docker login ${NEXUS_HOST} -u admin --password-stdin
+                    """
+                    echo "✅ Successfully logged in to Nexus"
+                    
+                    // Push all images
                     sh """
                         docker push ${NEXUS_BACKEND_IMAGE}
                         docker push ${NEXUS_BACKEND_IMAGE_LATEST}
