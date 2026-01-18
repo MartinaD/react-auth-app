@@ -69,7 +69,7 @@ pipeline {
                     
                     // Login to Nexus
                     sh """
-                        echo 'DevOps123$' | docker login ${NEXUS_HOST} -u admin --password-stdin
+                        echo 'DevOps123\$' | docker login ${NEXUS_HOST} -u admin --password-stdin
                     """
                     echo "✅ Successfully logged in to Nexus"
                     
