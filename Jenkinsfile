@@ -7,12 +7,8 @@ pipeline {
         FRONTEND_IMAGE = 'bozhinovskam/react-auth-frontend:latest'
         
         // Nexus configuration
-        // Get Nexus container IP since Jenkins uses host's Docker daemon (hostname won't resolve)
-        NEXUS_IP = sh(
-            script: 'docker inspect nexus 2>/dev/null | grep -A 10 "Networks" | grep "IPAddress" | head -1 | cut -d\\" -f4 || echo "172.18.0.2"',
-            returnStdout: true
-        ).trim()
-        NEXUS_HOST = "${NEXUS_IP}:8082"
+        // Use localhost since Jenkins uses host's Docker daemon and port 8082 is forwarded
+        NEXUS_HOST = 'localhost:8082'
         NEXUS_REPOSITORY = 'docker-hosted'
         NEXUS_BACKEND_IMAGE = "${NEXUS_HOST}/${NEXUS_REPOSITORY}/react-auth-backend:${BUILD_NUMBER}"
         NEXUS_FRONTEND_IMAGE = "${NEXUS_HOST}/${NEXUS_REPOSITORY}/react-auth-frontend:${BUILD_NUMBER}"
