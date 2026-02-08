@@ -22,7 +22,37 @@ pipeline {
             steps {
                 script {
                     echo "Checking out code from repository..."
-                checkout scm
+                    checkout scm
+                }
+            }
+        }
+        
+        stage('Test Backend') {
+            steps {
+                dir("backend") {
+                    script {
+                        echo "Running backend tests..."
+                        sh """
+                            npm install
+                            npm test
+                        """
+                        echo "✅ Backend tests passed"
+                    }
+                }
+            }
+        }
+        
+        stage('Test Frontend') {
+            steps {
+                dir("frontend") {
+                    script {
+                        echo "Running frontend tests..."
+                        sh """
+                            npm install
+                            npm test
+                        """
+                        echo "✅ Frontend tests passed"
+                    }
                 }
             }
         }
@@ -32,11 +62,11 @@ pipeline {
                 dir("backend") {
                     script {
                         echo "Building backend Docker image..."
-                    sh """
-                        docker build -t ${BACKEND_IMAGE} -f Dockerfile .
-                        docker tag ${BACKEND_IMAGE} ${NEXUS_BACKEND_IMAGE}
-                        docker tag ${BACKEND_IMAGE} ${NEXUS_BACKEND_IMAGE_LATEST}
-                    """
+                        sh """
+                            docker build -t ${BACKEND_IMAGE} -f Dockerfile .
+                            docker tag ${BACKEND_IMAGE} ${NEXUS_BACKEND_IMAGE}
+                            docker tag ${BACKEND_IMAGE} ${NEXUS_BACKEND_IMAGE_LATEST}
+                        """
                         echo "Backend image built successfully: ${BACKEND_IMAGE}"
                         echo "Tagged for Nexus: ${NEXUS_BACKEND_IMAGE}"
                     }
@@ -49,11 +79,11 @@ pipeline {
                 dir("frontend") {
                     script {
                         echo "Building frontend Docker image..."
-                    sh """
-                        docker build -t ${FRONTEND_IMAGE} -f Dockerfile .
-                        docker tag ${FRONTEND_IMAGE} ${NEXUS_FRONTEND_IMAGE}
-                        docker tag ${FRONTEND_IMAGE} ${NEXUS_FRONTEND_IMAGE_LATEST}
-                    """
+                        sh """
+                            docker build -t ${FRONTEND_IMAGE} -f Dockerfile .
+                            docker tag ${FRONTEND_IMAGE} ${NEXUS_FRONTEND_IMAGE}
+                            docker tag ${FRONTEND_IMAGE} ${NEXUS_FRONTEND_IMAGE_LATEST}
+                        """
                         echo "Frontend image built successfully: ${FRONTEND_IMAGE}"
                         echo "Tagged for Nexus: ${NEXUS_FRONTEND_IMAGE}"
                     }
@@ -103,6 +133,7 @@ pipeline {
             echo "Pipeline failed! ❌"
             script {
                 echo "Build #${BUILD_NUMBER} failed"
+                echo "Check test results and build logs for details"
             }
         }
         
