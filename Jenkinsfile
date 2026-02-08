@@ -1,5 +1,9 @@
 pipeline {
     agent any
+
+    tools {
+        nodejs "Node" // NodeJS Plugin
+    }
     
     environment {
         // Docker image names
