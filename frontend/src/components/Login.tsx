@@ -82,7 +82,6 @@ function Login() {
               value={formData.email}
               onChange={handleChange}
               placeholder="Enter your email"
-              required
             />
           </div>
 
@@ -95,7 +94,6 @@ function Login() {
               value={formData.password}
               onChange={handleChange}
               placeholder="Enter your password"
-              required
             />
           </div>
 
