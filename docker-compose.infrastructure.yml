@@ -1,0 +1,84 @@
+services:
+  # Defines the Gitea container
+  gitea:
+    image: gitea/gitea:latest
+    container_name: gitea
+    environment:
+      - USER_UID=1000
+      - USER_GID=1000
+      - GITEA__database__DB_TYPE=postgres
+      - GITEA__database__HOST=db:5432
+      - GITEA__database__NAME=gitea
+      - GITEA__database__USER=gitea
+      - GITEA__database__PASSWD=gitea
+    restart: always
+    networks:
+      - gitea
+    volumes:
+      - ./gitea:/data
+      - /etc/timezone:/etc/timezone:ro  
+      - /etc/localtime:/etc/localtime:ro
+    ports:
+      - "3000:3000"
+      - "2222:22"
+    depends_on:
+      - db
+
+  # Defines the PostgreSQL container; used by Gitea for metadata storage
+  db:
+    image: postgres:15-alpine
+    restart: always
+    environment:
+      - POSTGRES_USER=gitea
+      - POSTGRES_PASSWORD=gitea
+      - POSTGRES_DB=gitea
+    networks:
+      - gitea
+    volumes:
+      - ./postgres-data:/var/lib/postgresql/data
+
+  # Defines the Jenkins container; used for CI/CD pipeline automation
+  jenkins:
+    image: jenkins/jenkins:lts
+    container_name: jenkins
+    user: root
+    #password  docker exec jenkins cat /var/jenkins_home/secrets/initialAdminPassword
+    restart: always
+    ports:
+      - "8080:8080"
+      - "50000:50000"
+    networks:
+      - gitea
+    volumes:
+      - ./jenkins-data:/var/jenkins_home
+      - /var/run/docker.sock:/var/run/docker.sock
+    labels:
+      - "com.docker.compose.service=jenkins"
+      - "app.url=http://localhost:8080"
+      - "app.port=8080"
+    depends_on:
+      - nexus
+
+  # Defines the Nexus container; used for artifact storage and distribution
+  nexus:
+    image: sonatype/nexus3:latest
+    container_name: nexus
+    restart: always
+    ports:
+      - "8081:8081"  # Nexus Web UI
+      - "8082:8082"  # Docker registry (HTTP)
+    networks:
+      - gitea
+    volumes:
+      - ./nexus-data:/nexus-data
+    environment:
+      - NEXUS_SECURITY_RANDOMPASSWORD=false
+    labels:
+      - "com.docker.compose.service=nexus"
+      - "app.url=http://localhost:8081"
+      - "app.port=8081"
+
+networks:
+  gitea:
+    external: false
+
