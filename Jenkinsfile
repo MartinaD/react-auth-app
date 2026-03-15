@@ -122,9 +122,49 @@ pipeline {
                 }
             }
         }
+
+        stage('Deploy to Green') {
+            steps {
+                script {
+                    echo "Deploying new version to Green environment..."
+                    // Use images we just pushed; tag for compose then recreate Green containers
+                    sh """
+                        docker pull ${NEXUS_BACKEND_IMAGE_LATEST} || true
+                        docker pull ${NEXUS_FRONTEND_IMAGE_LATEST} || true
+                        docker tag ${NEXUS_BACKEND_IMAGE_LATEST} ${BACKEND_IMAGE}
+                        docker tag ${NEXUS_FRONTEND_IMAGE_LATEST} ${FRONTEND_IMAGE}
+                        docker compose -f docker-compose.blue-green.yml up -d green-backend green-frontend
+                    """
+                    echo "✅ Green environment updated with new images"
+                }
+            }
+        }
+
+        stage('Health Check Green') {
+            steps {
+                script {
+                    echo "Checking Green backend health..."
+                    sh """
+                        sleep 5
+                        docker exec green-backend curl -f http://localhost:3001/api/health || (echo "Health check failed"; exit 1)
+                    """
+                    echo "✅ Green environment is healthy"
+                }
+            }
+        }
+
+        stage('Switch to Green') {
+            steps {
+                script {
+                    echo "Switching traffic from Blue to Green..."
+                    sh "./scripts/switch-to-green.sh"
+                    echo "✅ Traffic now served by Green (new version)"
+                }
+            }
+        }
     }
-    
-    
+
+
     post {
         success {
             echo "Pipeline completed successfully! ✅"
@@ -138,6 +178,8 @@ pipeline {
             script {
                 echo "Build #${BUILD_NUMBER} failed"
                 echo "Check test results and build logs for details"
+                // Optional: rollback traffic to Blue if switch was already done
+                sh "./scripts/switch-to-blue.sh || true"
             }
         }
         
