@@ -133,7 +133,7 @@ pipeline {
                         docker pull ${NEXUS_FRONTEND_IMAGE_LATEST} || true
                         docker tag ${NEXUS_BACKEND_IMAGE_LATEST} ${BACKEND_IMAGE}
                         docker tag ${NEXUS_FRONTEND_IMAGE_LATEST} ${FRONTEND_IMAGE}
-                        docker compose -f docker-compose.blue-green.yml up -d green-backend green-frontend
+                        docker-compose -f docker-compose.blue-green.yml up -d green-backend green-frontend
                     """
                     echo "✅ Green environment updated with new images"
                 }
