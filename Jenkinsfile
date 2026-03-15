@@ -107,10 +107,11 @@ pipeline {
         stage('Deploy Green') {
             steps {
                 sh """
-                    if ! docker compose version 2>/dev/null; then
-                        echo "Installing docker-compose-plugin..."
-                        apt-get update -qq && apt-get install -y docker-compose-plugin || true
-                    fi
+                    if ! command -v docker-compose >/dev/null 2>&1; then
+                echo "Installing classic docker-compose..."
+                curl -L "https://github.com/docker/compose/releases/download/v2.20.2/docker-compose-\$(uname -s)-\$(uname -m)" -o /usr/local/bin/docker-compose
+                chmod +x /usr/local/bin/docker-compose
+            fi
                     docker compose -f docker-compose.blue-green.yml pull
                     docker compose -f docker-compose.blue-green.yml up -d green-backend green-frontend nginx
                 """
@@ -119,18 +120,49 @@ pipeline {
 
         stage('Health Check') {
             steps {
-                retry(5) {
-                    sh '''
-                        sleep 5
-                        docker exec green-backend curl -f http://localhost:3001/api/health
-                    '''
+                echo "Running pre-switch health checks on green..."
+                script {
+                    def backendHealthy = sh(script: 'curl -f http://localhost:3001/api/health', returnStatus: true) == 0
+                    def frontendHealthy = sh(script: 'curl -f http://localhost', returnStatus: true) == 0
+
+                    if (!backendHealthy || !frontendHealthy) {
+                        error "Pre-switch health check failed. Green environment is unhealthy."
+                    }
                 }
             }
         }
 
         stage('Switch Traffic') {
             steps {
+                echo "Switching traffic to green..."
                 sh "bash scripts/switch-to-green.sh"
+                script { env.TRAFFIC_SWITCHED = 'true' }
+            }
+        }
+
+        stage('Post-Switch Health Check') {
+            steps {
+                echo "Running post-switch health checks while green is live..."
+                script {
+                    // Retry a few times in case services take time to stabilize
+                    def retries = 3
+                    def success = false
+                    for (int i = 0; i < retries; i++) {
+                        def backendHealthy = sh(script: 'curl -f http://localhost:3001/api/health', returnStatus: true) == 0
+                        def frontendHealthy = sh(script: 'curl -f http://localhost', returnStatus: true) == 0
+                        if (backendHealthy && frontendHealthy) {
+                            success = true
+                            break
+                        } else {
+                            echo "Post-switch health check failed. Retrying in 5 seconds..."
+                            sleep 5
+                        }
+                    }
+
+                    if (!success) {
+                        error "Post-switch health check failed. Rolling back to blue."
+                    }
+                }
             }
         }
     }
@@ -142,30 +174,21 @@ pipeline {
         }
 
         failure {
-            echo "Deployment failed — rolling back"
             script {
-                checkout scm
-
-                echo "=== DEBUG: workspace (after checkout) ==="
-                sh "pwd && echo '---' && ls -la && echo '--- scripts/ ---' && ls -la scripts/ 2>/dev/null || echo 'scripts/ does not exist'"
-
-                echo "=== DEBUG: Docker — does Jenkins see app-nginx? ==="
-                sh "docker ps -a | grep -E 'app-nginx|CONTAINER' || echo 'No app-nginx in docker ps'"
-
-                echo "=== DEBUG: nginx reload attempt (to see actual error) ==="
-                sh "docker exec app-nginx nginx -s reload 2>&1 || true"
-
-                if (fileExists('scripts/switch-to-blue.sh')) {
-                    echo "Found scripts/switch-to-blue.sh, running rollback..."
-                    sh "bash scripts/switch-to-blue.sh"
-                    if (fileExists('nginx/active.conf')) {
-                        echo "=== nginx/active.conf (after rollback) ==="
-                        echo readFile('nginx/active.conf')
+                if (env.TRAFFIC_SWITCHED == 'true') {
+                    echo "Deployment failed (health checks failed or traffic switch failed) — rolling back to Blue"
+                    checkout scm
+                    if (fileExists('scripts/switch-to-blue.sh')) {
+                        sh "bash scripts/switch-to-blue.sh"
+                        if (fileExists('nginx/active.conf')) {
+                            echo "=== nginx/active.conf (after rollback) ==="
+                            echo readFile('nginx/active.conf')
+                        }
                     } else {
-                        echo "nginx/active.conf does not exist in workspace"
+                        echo "scripts/switch-to-blue.sh not found, skipping rollback"
                     }
                 } else {
-                    echo "scripts/switch-to-blue.sh not found, skipping rollback"
+                    echo "Deployment failed. Rollback skipped (failure occurred before Deploy Green)."
                 }
             }
         }
