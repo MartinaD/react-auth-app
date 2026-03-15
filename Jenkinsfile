@@ -157,7 +157,7 @@ pipeline {
             steps {
                 script {
                     echo "Switching traffic from Blue to Green..."
-                    echo "ls -la"
+                    sh 'ls -la'
                     sh "./scripts/switch-to-green.sh"
                     echo "✅ Traffic now served by Green (new version)"
                 }
@@ -180,7 +180,7 @@ pipeline {
                 echo "Build #${BUILD_NUMBER} failed"
                 echo "Check test results and build logs for details"
                 // rollback traffic to Blue if switch was already done
-                echo "ls -la"
+                sh 'ls -la'
                 sh "./scripts/switch-to-blue.sh || true"
             }
         }
