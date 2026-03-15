@@ -27,6 +27,9 @@ pipeline {
                 script {
                     echo "Checking out code from repository..."
                     checkout scm
+                    // Pipeline from SCM checks out to a hash subdir; capture actual repo root for scripts/compose
+                    env.REPO_ROOT = sh(script: 'pwd', returnStdout: true).trim()
+                    echo "Repo root (checkout dir): ${env.REPO_ROOT}"
                 }
             }
         }
@@ -127,13 +130,13 @@ pipeline {
             steps {
                 script {
                     echo "Deploying new version to Green environment..."
-                    // Use images we just pushed; tag for compose then recreate Green containers
+                    // Use images we just pushed; tag for compose then recreate Green containers (run from repo root)
                     sh """
                         docker pull ${NEXUS_BACKEND_IMAGE_LATEST} || true
                         docker pull ${NEXUS_FRONTEND_IMAGE_LATEST} || true
                         docker tag ${NEXUS_BACKEND_IMAGE_LATEST} ${BACKEND_IMAGE}
                         docker tag ${NEXUS_FRONTEND_IMAGE_LATEST} ${FRONTEND_IMAGE}
-                        docker-compose -f docker-compose.blue-green.yml up -d green-backend green-frontend
+                        cd ${env.REPO_ROOT} && docker-compose -f docker-compose.blue-green.yml up -d green-backend green-frontend
                     """
                     echo "✅ Green environment updated with new images"
                 }
@@ -157,7 +160,7 @@ pipeline {
             steps {
                 script {
                     echo "Switching traffic from Blue to Green..."
-                    sh "${env.WORKSPACE}/scripts/switch-to-green.sh"
+                    sh "${env.REPO_ROOT}/scripts/switch-to-green.sh"
                     echo "✅ Traffic now served by Green (new version)"
                 }
             }
@@ -178,8 +181,8 @@ pipeline {
             script {
                 echo "Build #${BUILD_NUMBER} failed"
                 echo "Check test results and build logs for details"
-                // Optional: rollback traffic to Blue if switch was already done
-                sh "${env.WORKSPACE}/scripts/switch-to-blue.sh || true"
+                // Optional: rollback traffic to Blue if switch was already done (REPO_ROOT set in Checkout)
+                sh "${env.REPO_ROOT}/scripts/switch-to-blue.sh || true"
             }
         }
         
