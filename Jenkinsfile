@@ -27,9 +27,18 @@ pipeline {
                 script {
                     echo "Checking out code from repository..."
                     checkout scm
-                    // Pipeline from SCM checks out to a hash subdir; capture actual repo root for scripts/compose
-                    env.REPO_ROOT = sh(script: 'pwd', returnStdout: true).trim()
-                    echo "Repo root (checkout dir): ${env.REPO_ROOT}"
+                    // Find repo root (where scripts/ and Jenkinsfile are); works for job dir or @script/hash layout
+                    env.REPO_ROOT = sh(script: '''
+                        if [ -f scripts/switch-to-green.sh ]; then pwd; exit 0; fi
+                        found=$(find . -path "*/scripts/switch-to-green.sh" -type f 2>/dev/null | head -1)
+                        if [ -n "$found" ]; then
+                            cd "$(dirname "$(dirname "$found")")" && pwd
+                        else
+                            pwd
+                        fi
+                    ''', returnStdout: true).trim()
+                    echo "Repo root (for scripts): ${env.REPO_ROOT}"
+                    sh "test -f '${env.REPO_ROOT}/scripts/switch-to-green.sh' && echo 'Script found' || echo 'WARN: script not found at ${env.REPO_ROOT}/scripts/'"
                 }
             }
         }
@@ -160,7 +169,8 @@ pipeline {
             steps {
                 script {
                     echo "Switching traffic from Blue to Green..."
-                    sh "${env.REPO_ROOT}/scripts/switch-to-green.sh"
+                    // Run script with 'sh' so we don't rely on shebang (works in minimal Jenkins image)
+                    sh "sh '${env.REPO_ROOT}/scripts/switch-to-green.sh'"
                     echo "✅ Traffic now served by Green (new version)"
                 }
             }
@@ -181,8 +191,12 @@ pipeline {
             script {
                 echo "Build #${BUILD_NUMBER} failed"
                 echo "Check test results and build logs for details"
-                // Optional: rollback traffic to Blue if switch was already done (REPO_ROOT set in Checkout)
-                sh "${env.REPO_ROOT}/scripts/switch-to-blue.sh || true"
+                // Rollback: run switch-to-blue script (same way as Switch to Green)
+                script {
+                    if (env.REPO_ROOT?.trim()) {
+                        sh "sh '${env.REPO_ROOT}/scripts/switch-to-blue.sh' || true"
+                    }
+                }
             }
         }
         
