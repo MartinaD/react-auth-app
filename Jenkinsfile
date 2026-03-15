@@ -112,7 +112,7 @@ pipeline {
                         apt-get update -qq && apt-get install -y docker-compose-plugin || true
                     fi
                     docker compose -f docker-compose.blue-green.yml pull
-                    docker compose -f docker-compose.blue-green.yml up -d green-backend green-frontend
+                    docker compose -f docker-compose.blue-green.yml up -d green-backend green-frontend nginx
                 """
             }
         }
