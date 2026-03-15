@@ -105,8 +105,8 @@ pipeline {
         }
 
         stage('Deploy Green') {
-          steps {
-                sh """
+            steps {
+                sh '''
                     # Install Docker Compose plugin if missing
                     if ! docker compose version >/dev/null 2>&1; then
                         echo "Installing docker-compose-plugin..."
@@ -119,12 +119,12 @@ pipeline {
                         apt-get install -y docker-compose-plugin
                     fi
 
-                    # Pull the latest images
+                    # Pull latest images
                     docker compose -f docker-compose.blue-green.yml pull
 
                     # Start green services
                     docker compose -f docker-compose.blue-green.yml up -d green-backend green-frontend nginx
-                """
+                '''
             }
         }
 
