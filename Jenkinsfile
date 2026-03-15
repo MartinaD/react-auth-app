@@ -1,207 +1,154 @@
 pipeline {
     agent any
 
+    options {
+        buildDiscarder(logRotator(numToKeepStr: '10'))
+        timeout(time: 30, unit: 'MINUTES')
+        timestamps()
+    }
+
     tools {
-        nodejs "Node" // NodeJS Plugin
+        nodejs "Node"
     }
-    
+
     environment {
-        // Docker image names
-        BACKEND_IMAGE = 'bozhinovskam/react-auth-backend:latest'
-        FRONTEND_IMAGE = 'bozhinovskam/react-auth-frontend:latest'
-        
-        // Nexus configuration
-        // Use localhost since Jenkins uses host's Docker daemon
-        // Make sure localhost:8082 is in Docker Desktop's insecure-registries
-        NEXUS_HOST = "localhost:8082"
-        NEXUS_REPOSITORY = 'docker-hosted'
-        NEXUS_BACKEND_IMAGE = "${NEXUS_HOST}/${NEXUS_REPOSITORY}/react-auth-backend:${BUILD_NUMBER}"
-        NEXUS_FRONTEND_IMAGE = "${NEXUS_HOST}/${NEXUS_REPOSITORY}/react-auth-frontend:${BUILD_NUMBER}"
-        NEXUS_BACKEND_IMAGE_LATEST = "${NEXUS_HOST}/${NEXUS_REPOSITORY}/react-auth-backend:latest"
-        NEXUS_FRONTEND_IMAGE_LATEST = "${NEXUS_HOST}/${NEXUS_REPOSITORY}/react-auth-frontend:latest"
+        REGISTRY = "localhost:8082/docker-hosted"
+
+        BACKEND_IMAGE = "${REGISTRY}/react-auth-backend:${BUILD_NUMBER}"
+        FRONTEND_IMAGE = "${REGISTRY}/react-auth-frontend:${BUILD_NUMBER}"
+
+        BACKEND_LATEST = "${REGISTRY}/react-auth-backend:latest"
+        FRONTEND_LATEST = "${REGISTRY}/react-auth-frontend:latest"
     }
-    
+
     stages {
+
         stage('Checkout') {
             steps {
-                script {
-                    echo "Checking out code from repository..."
-                    checkout scm
-                    // Actual repo root (where code is); post { failure } has empty WORKSPACE, so we save it
-                    def root = sh(script: 'pwd', returnStdout: true).trim()
-                    writeFile file: '.jenkins-repo-root', text: root
-                    echo "Repo root: ${root}"
-                }
+                checkout scm
             }
         }
-        
-        stage('Test Backend') {
-            steps {
-                echo "Entered BE tests"
-                sh "ls -la"
-                dir("backend") {
-                    script {
-                        echo "Running backend tests..."
-                        sh """
-                            npm install
-                            npm test
-                        """
-                        echo "✅ Backend tests passed"
+
+        stage('Install & Test') {
+            parallel {
+
+                stage('Backend Test') {
+                    steps {
+                        dir('backend') {
+                            sh '''
+                                npm ci
+                                npm test
+                            '''
+                        }
+                    }
+                }
+
+                stage('Frontend Test') {
+                    steps {
+                        dir('frontend') {
+                            sh '''
+                                npm ci
+                                npm test
+                            '''
+                        }
                     }
                 }
             }
         }
-        
-        // stage('Test Frontend') {
-        //     steps {
-        //         dir("frontend") {
-        //             script {
-        //                 echo "Running frontend tests..."
-        //                 sh """
-        //                     npm install
-        //                     npm test
-        //                 """
-        //                 echo "✅ Frontend tests passed"
-        //             }
-        //         }
-        //     }
-        // }
-        
-        // stage('Build Backend') {
-        //     steps {
-        //         dir("backend") {
-        //             script {
-        //                 echo "Building backend Docker image..."
-        //                 sh """
-        //                     docker build -t ${BACKEND_IMAGE} -f Dockerfile .
-        //                     docker tag ${BACKEND_IMAGE} ${NEXUS_BACKEND_IMAGE}
-        //                     docker tag ${BACKEND_IMAGE} ${NEXUS_BACKEND_IMAGE_LATEST}
-        //                 """
-        //                 echo "Backend image built successfully: ${BACKEND_IMAGE}"
-        //                 echo "Tagged for Nexus: ${NEXUS_BACKEND_IMAGE}"
-        //             }
-        //         }
-        //     }
-        // }
-        
-        // stage('Build Frontend') {
-        //     steps {
-        //         dir("frontend") {
-        //             script {
-        //                 echo "Building frontend Docker image..."
-        //                 sh """
-        //                     docker build -t ${FRONTEND_IMAGE} -f Dockerfile .
-        //                     docker tag ${FRONTEND_IMAGE} ${NEXUS_FRONTEND_IMAGE}
-        //                     docker tag ${FRONTEND_IMAGE} ${NEXUS_FRONTEND_IMAGE_LATEST}
-        //                 """
-        //                 echo "Frontend image built successfully: ${FRONTEND_IMAGE}"
-        //                 echo "Tagged for Nexus: ${NEXUS_FRONTEND_IMAGE}"
-        //             }
-        //         }
-        //     }
-        // }
-        
-        // stage('Push to Nexus') {
-        //     steps {
-        //         script {
-        //             echo "Pushing Docker images to Nexus..."
-        //             echo "Using Nexus at: ${NEXUS_HOST}"
-                    
-        //             // Login to Nexus
-        //             sh """
-        //                 echo 'DevOps123\$' | docker login ${NEXUS_HOST} -u admin --password-stdin
-        //             """
-        //             echo "✅ Successfully logged in to Nexus"
-                    
-        //             // Push all images
-        //             sh """
-        //                 docker push ${NEXUS_BACKEND_IMAGE}
-        //                 docker push ${NEXUS_BACKEND_IMAGE_LATEST}
-        //                 docker push ${NEXUS_FRONTEND_IMAGE}
-        //                 docker push ${NEXUS_FRONTEND_IMAGE_LATEST}
-        //             """
-                    
-        //             echo "✅ All images pushed to Nexus successfully!"
-        //             echo "Backend: ${NEXUS_BACKEND_IMAGE} and ${NEXUS_BACKEND_IMAGE_LATEST}"
-        //             echo "Frontend: ${NEXUS_FRONTEND_IMAGE} and ${NEXUS_FRONTEND_IMAGE_LATEST}"
-        //             echo "View in Nexus UI: http://localhost:8081 → Browse → docker-hosted"
-        //         }
-        //     }
-        // }
 
-        stage('Deploy to Green') {
-            steps {
-                script {
-                    echo "Deploying new version to Green environment..."
-                    sh "ls -la"
-                    dir(env.WORKSPACE) {
-                        sh """
-                            docker pull ${NEXUS_BACKEND_IMAGE_LATEST} || true
-                            docker pull ${NEXUS_FRONTEND_IMAGE_LATEST} || true
-                            docker tag ${NEXUS_BACKEND_IMAGE_LATEST} ${BACKEND_IMAGE}
-                            docker tag ${NEXUS_FRONTEND_IMAGE_LATEST} ${FRONTEND_IMAGE}
-                            docker-compose -f docker-compose.blue-green.yml up -d green-backend green-frontend
-                        """
+        stage('Build Docker Images') {
+            parallel {
+
+                stage('Backend Image') {
+                    steps {
+                        dir('backend') {
+                            sh """
+                                docker build -t ${BACKEND_IMAGE} .
+                                docker tag ${BACKEND_IMAGE} ${BACKEND_LATEST}
+                            """
+                        }
                     }
-                    echo "✅ Green environment updated with new images"
+                }
+
+                stage('Frontend Image') {
+                    steps {
+                        dir('frontend') {
+                            sh """
+                                docker build -t ${FRONTEND_IMAGE} .
+                                docker tag ${FRONTEND_IMAGE} ${FRONTEND_LATEST}
+                            """
+                        }
+                    }
                 }
             }
         }
 
-        stage('Health Check Green') {
+        stage('Push Images') {
             steps {
-                script {
-                    echo "Checking Green backend health..."
+                withCredentials([usernamePassword(
+                    credentialsId: 'nexus-docker',
+                    usernameVariable: 'NEXUS_USER',
+                    passwordVariable: 'NEXUS_PASS'
+                )]) {
+
                     sh """
-                        sleep 5
-                        docker exec green-backend curl -f http://localhost:3001/api/health || (echo "Health check failed"; exit 1)
+                        echo \$NEXUS_PASS | docker login ${REGISTRY} -u \$NEXUS_USER --password-stdin
+
+                        docker push ${BACKEND_IMAGE}
+                        docker push ${BACKEND_LATEST}
+
+                        docker push ${FRONTEND_IMAGE}
+                        docker push ${FRONTEND_LATEST}
                     """
-                    echo "✅ Green environment is healthy"
                 }
             }
         }
 
-        stage('Switch to Green') {
+        stage('Deploy Green') {
             steps {
-                script {
-                    echo "Switching traffic from Blue to Green..."
-                    sh 'ls -la'
-                    sh "./scripts/switch-to-green.sh"
-                    echo "✅ Traffic now served by Green (new version)"
+                sh """
+                    docker compose -f docker-compose.blue-green.yml pull
+                    docker compose -f docker-compose.blue-green.yml up -d green-backend green-frontend
+                """
+            }
+        }
+
+        stage('Health Check') {
+            steps {
+                retry(5) {
+                    sh '''
+                        sleep 5
+                        docker exec green-backend curl -f http://localhost:3001/api/health
+                    '''
                 }
+            }
+        }
+
+        stage('Switch Traffic') {
+            steps {
+                sh "bash scripts/switch-to-green.sh"
             }
         }
     }
 
-
     post {
+
         success {
-            echo "Pipeline completed successfully! ✅"
-            script {
-                echo "Build #${BUILD_NUMBER} succeeded"
-            }
+            echo "Deployment successful 🎉"
         }
-        
+
         failure {
-            echo "Pipeline failed! ❌"
-            script {
-                echo "Build #${BUILD_NUMBER} failed"
-                echo "Check test results and build logs for details"
-                try {
-                    def root = readFile('.jenkins-repo-root').trim()
-                    dir(root) {
-                        sh "sh scripts/switch-to-blue.sh || true"
-                    }
-                } catch (Exception e) {
-                    echo "Skipping rollback (no .jenkins-repo-root)"
-                }
-            }
+            echo "Deployment failed — rolling back"
+
+            sh '''
+                if [ -f scripts/switch-to-blue.sh ]; then
+                    bash scripts/switch-to-blue.sh
+                fi
+            '''
         }
-        
+
         always {
-            echo "Cleaning up workspace..."
             cleanWs()
         }
     }
 }
-
