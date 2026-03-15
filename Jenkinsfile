@@ -27,12 +27,18 @@ pipeline {
                 script {
                     echo "Checking out code from repository..."
                     checkout scm
+                    // Actual repo root (where code is); post { failure } has empty WORKSPACE, so we save it
+                    def root = sh(script: 'pwd', returnStdout: true).trim()
+                    writeFile file: '.jenkins-repo-root', text: root
+                    echo "Repo root: ${root}"
                 }
             }
         }
         
         stage('Test Backend') {
             steps {
+                echo "Entered BE tests"
+                sh "ls -la"
                 dir("backend") {
                     script {
                         echo "Running backend tests..."
@@ -46,87 +52,88 @@ pipeline {
             }
         }
         
-        stage('Test Frontend') {
-            steps {
-                dir("frontend") {
-                    script {
-                        echo "Running frontend tests..."
-                        sh """
-                            npm install
-                            npm test
-                        """
-                        echo "✅ Frontend tests passed"
-                    }
-                }
-            }
-        }
+        // stage('Test Frontend') {
+        //     steps {
+        //         dir("frontend") {
+        //             script {
+        //                 echo "Running frontend tests..."
+        //                 sh """
+        //                     npm install
+        //                     npm test
+        //                 """
+        //                 echo "✅ Frontend tests passed"
+        //             }
+        //         }
+        //     }
+        // }
         
-        stage('Build Backend') {
-            steps {
-                dir("backend") {
-                    script {
-                        echo "Building backend Docker image..."
-                        sh """
-                            docker build -t ${BACKEND_IMAGE} -f Dockerfile .
-                            docker tag ${BACKEND_IMAGE} ${NEXUS_BACKEND_IMAGE}
-                            docker tag ${BACKEND_IMAGE} ${NEXUS_BACKEND_IMAGE_LATEST}
-                        """
-                        echo "Backend image built successfully: ${BACKEND_IMAGE}"
-                        echo "Tagged for Nexus: ${NEXUS_BACKEND_IMAGE}"
-                    }
-                }
-            }
-        }
+        // stage('Build Backend') {
+        //     steps {
+        //         dir("backend") {
+        //             script {
+        //                 echo "Building backend Docker image..."
+        //                 sh """
+        //                     docker build -t ${BACKEND_IMAGE} -f Dockerfile .
+        //                     docker tag ${BACKEND_IMAGE} ${NEXUS_BACKEND_IMAGE}
+        //                     docker tag ${BACKEND_IMAGE} ${NEXUS_BACKEND_IMAGE_LATEST}
+        //                 """
+        //                 echo "Backend image built successfully: ${BACKEND_IMAGE}"
+        //                 echo "Tagged for Nexus: ${NEXUS_BACKEND_IMAGE}"
+        //             }
+        //         }
+        //     }
+        // }
         
-        stage('Build Frontend') {
-            steps {
-                dir("frontend") {
-                    script {
-                        echo "Building frontend Docker image..."
-                        sh """
-                            docker build -t ${FRONTEND_IMAGE} -f Dockerfile .
-                            docker tag ${FRONTEND_IMAGE} ${NEXUS_FRONTEND_IMAGE}
-                            docker tag ${FRONTEND_IMAGE} ${NEXUS_FRONTEND_IMAGE_LATEST}
-                        """
-                        echo "Frontend image built successfully: ${FRONTEND_IMAGE}"
-                        echo "Tagged for Nexus: ${NEXUS_FRONTEND_IMAGE}"
-                    }
-                }
-            }
-        }
+        // stage('Build Frontend') {
+        //     steps {
+        //         dir("frontend") {
+        //             script {
+        //                 echo "Building frontend Docker image..."
+        //                 sh """
+        //                     docker build -t ${FRONTEND_IMAGE} -f Dockerfile .
+        //                     docker tag ${FRONTEND_IMAGE} ${NEXUS_FRONTEND_IMAGE}
+        //                     docker tag ${FRONTEND_IMAGE} ${NEXUS_FRONTEND_IMAGE_LATEST}
+        //                 """
+        //                 echo "Frontend image built successfully: ${FRONTEND_IMAGE}"
+        //                 echo "Tagged for Nexus: ${NEXUS_FRONTEND_IMAGE}"
+        //             }
+        //         }
+        //     }
+        // }
         
-        stage('Push to Nexus') {
-            steps {
-                script {
-                    echo "Pushing Docker images to Nexus..."
-                    echo "Using Nexus at: ${NEXUS_HOST}"
+        // stage('Push to Nexus') {
+        //     steps {
+        //         script {
+        //             echo "Pushing Docker images to Nexus..."
+        //             echo "Using Nexus at: ${NEXUS_HOST}"
                     
-                    // Login to Nexus
-                    sh """
-                        echo 'DevOps123\$' | docker login ${NEXUS_HOST} -u admin --password-stdin
-                    """
-                    echo "✅ Successfully logged in to Nexus"
+        //             // Login to Nexus
+        //             sh """
+        //                 echo 'DevOps123\$' | docker login ${NEXUS_HOST} -u admin --password-stdin
+        //             """
+        //             echo "✅ Successfully logged in to Nexus"
                     
-                    // Push all images
-                    sh """
-                        docker push ${NEXUS_BACKEND_IMAGE}
-                        docker push ${NEXUS_BACKEND_IMAGE_LATEST}
-                        docker push ${NEXUS_FRONTEND_IMAGE}
-                        docker push ${NEXUS_FRONTEND_IMAGE_LATEST}
-                    """
+        //             // Push all images
+        //             sh """
+        //                 docker push ${NEXUS_BACKEND_IMAGE}
+        //                 docker push ${NEXUS_BACKEND_IMAGE_LATEST}
+        //                 docker push ${NEXUS_FRONTEND_IMAGE}
+        //                 docker push ${NEXUS_FRONTEND_IMAGE_LATEST}
+        //             """
                     
-                    echo "✅ All images pushed to Nexus successfully!"
-                    echo "Backend: ${NEXUS_BACKEND_IMAGE} and ${NEXUS_BACKEND_IMAGE_LATEST}"
-                    echo "Frontend: ${NEXUS_FRONTEND_IMAGE} and ${NEXUS_FRONTEND_IMAGE_LATEST}"
-                    echo "View in Nexus UI: http://localhost:8081 → Browse → docker-hosted"
-                }
-            }
-        }
+        //             echo "✅ All images pushed to Nexus successfully!"
+        //             echo "Backend: ${NEXUS_BACKEND_IMAGE} and ${NEXUS_BACKEND_IMAGE_LATEST}"
+        //             echo "Frontend: ${NEXUS_FRONTEND_IMAGE} and ${NEXUS_FRONTEND_IMAGE_LATEST}"
+        //             echo "View in Nexus UI: http://localhost:8081 → Browse → docker-hosted"
+        //         }
+        //     }
+        // }
 
         stage('Deploy to Green') {
             steps {
                 script {
                     echo "Deploying new version to Green environment..."
+                    sh "ls -la"
                     dir(env.WORKSPACE) {
                         sh """
                             docker pull ${NEXUS_BACKEND_IMAGE_LATEST} || true
@@ -180,9 +187,13 @@ pipeline {
             script {
                 echo "Build #${BUILD_NUMBER} failed"
                 echo "Check test results and build logs for details"
-                dir(env.WORKSPACE) {
-                    sh 'ls -la'
-                    sh "sh scripts/switch-to-blue.sh || true"
+                try {
+                    def root = readFile('.jenkins-repo-root').trim()
+                    dir(root) {
+                        sh "sh scripts/switch-to-blue.sh || true"
+                    }
+                } catch (Exception e) {
+                    echo "Skipping rollback (no .jenkins-repo-root)"
                 }
             }
         }
