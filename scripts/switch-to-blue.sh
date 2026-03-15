@@ -1,9 +1,9 @@
-#!/bin/bash
+#!/bin/sh
 # Switch traffic from Green back to Blue (rollback)
 set -e
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)" # absolute path to the script
-REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)" # absolute path to the root of the repository
-ACTIVE_CONF="$REPO_ROOT/nginx/active.conf" # path to the active.conf file
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+ACTIVE_CONF="$REPO_ROOT/nginx/active.conf"
 
 cat > "$ACTIVE_CONF" << 'BLUE' # write the active.conf file
 # Active environment: Blue (default)
