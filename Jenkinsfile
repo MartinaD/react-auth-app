@@ -107,6 +107,10 @@ pipeline {
         stage('Deploy Green') {
             steps {
                 sh """
+                    if ! docker compose version 2>/dev/null; then
+                        echo "Installing docker-compose-plugin..."
+                        apt-get update -qq && apt-get install -y docker-compose-plugin || true
+                    fi
                     docker compose -f docker-compose.blue-green.yml pull
                     docker compose -f docker-compose.blue-green.yml up -d green-backend green-frontend
                 """
@@ -142,7 +146,10 @@ pipeline {
 
             sh '''
                 if [ -f scripts/switch-to-blue.sh ]; then
+                    echo "Found scripts/switch-to-blue.sh, running rollback..."
                     bash scripts/switch-to-blue.sh
+                else
+                    echo "scripts/switch-to-blue.sh not found, skipping rollback"
                 fi
             '''
         }
