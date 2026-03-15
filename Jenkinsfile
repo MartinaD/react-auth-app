@@ -145,9 +145,25 @@ pipeline {
             echo "Deployment failed — rolling back"
             script {
                 checkout scm
+
+                echo "=== DEBUG: workspace (after checkout) ==="
+                sh "pwd && echo '---' && ls -la && echo '--- scripts/ ---' && ls -la scripts/ 2>/dev/null || echo 'scripts/ does not exist'"
+
+                echo "=== DEBUG: Docker — does Jenkins see app-nginx? ==="
+                sh "docker ps -a | grep -E 'app-nginx|CONTAINER' || echo 'No app-nginx in docker ps'"
+
+                echo "=== DEBUG: nginx reload attempt (to see actual error) ==="
+                sh "docker exec app-nginx nginx -s reload 2>&1 || true"
+
                 if (fileExists('scripts/switch-to-blue.sh')) {
                     echo "Found scripts/switch-to-blue.sh, running rollback..."
                     sh "bash scripts/switch-to-blue.sh"
+                    if (fileExists('nginx/active.conf')) {
+                        echo "=== nginx/active.conf (after rollback) ==="
+                        echo readFile('nginx/active.conf')
+                    } else {
+                        echo "nginx/active.conf does not exist in workspace"
+                    }
                 } else {
                     echo "scripts/switch-to-blue.sh not found, skipping rollback"
                 }
