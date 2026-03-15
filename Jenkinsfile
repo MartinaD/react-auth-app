@@ -143,15 +143,15 @@ pipeline {
 
         failure {
             echo "Deployment failed — rolling back"
-
-            sh '''
-                if [ -f scripts/switch-to-blue.sh ]; then
+            script {
+                checkout scm
+                if (fileExists('scripts/switch-to-blue.sh')) {
                     echo "Found scripts/switch-to-blue.sh, running rollback..."
-                    bash scripts/switch-to-blue.sh
-                else
+                    sh "bash scripts/switch-to-blue.sh"
+                } else {
                     echo "scripts/switch-to-blue.sh not found, skipping rollback"
-                fi
-            '''
+                }
+            }
         }
 
         always {
