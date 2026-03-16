@@ -39,7 +39,8 @@ services:
 
   # Defines the Jenkins container; used for CI/CD pipeline automation
   jenkins:
-    image: jenkins/jenkins:lts
+    build:
+      context: ./jenkins
     container_name: jenkins
     user: root
     #password  docker exec jenkins cat /var/jenkins_home/secrets/initialAdminPassword

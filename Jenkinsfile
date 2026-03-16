@@ -26,7 +26,6 @@ pipeline {
         stage('Checkout') {
             steps {
                 checkout scm
-                sh 'docker-compose --version'
             }
         }
 
@@ -107,13 +106,10 @@ pipeline {
 
         stage('Deploy Green') {
             steps {
-                sh '''
-                    # Pull latest images
-                    docker-compose -f docker-compose.blue-green.yml pull
-
-                    # Start green services
-                    docker-compose -f docker-compose.blue-green.yml up -d green-backend green-frontend nginx
-                '''
+                sh """
+                    docker compose -f docker-compose.blue-green.yml pull
+                    docker compose -f docker-compose.blue-green.yml up -d green-backend green-frontend nginx
+                """
             }
         }
 
