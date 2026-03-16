@@ -107,8 +107,8 @@ pipeline {
         stage('Deploy Green') {
             steps {
                 sh """
-                    docker compose -f docker-compose.blue-green.yml pull
-                    docker compose -f docker-compose.blue-green.yml up -d green-backend green-frontend nginx
+                    docker-compose -f docker-compose.blue-green.yml pull
+                    docker-compose -f docker-compose.blue-green.yml up -d green-backend green-frontend nginx
                 """
             }
         }
