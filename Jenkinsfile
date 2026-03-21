@@ -117,7 +117,7 @@ pipeline {
             steps {
                 echo "Running pre-switch health checks on green..."
                 script {
-                    def backendHealthy = sh(script: 'docker exec green-backend curl -f http://localhost:3001/api/health', returnStatus: true) == 0
+                    def backendHealthy = sh(script: 'docker exec green-backend curl -f http://localhost:3111/api/health', returnStatus: true) == 0
                     def frontendHealthy = sh(script: 'docker exec green-frontend curl -f http://localhost', returnStatus: true) == 0
 
                     if (!backendHealthy || !frontendHealthy) {
@@ -143,7 +143,7 @@ pipeline {
                     def retries = 3
                     def success = false
                     for (int i = 0; i < retries; i++) {
-                        def backendHealthy = sh(script: 'docker exec green-backend curl -f http://localhost:3111/api/health', returnStatus: true) == 0
+                        def backendHealthy = sh(script: 'docker exec green-backend curl -f http://localhost:3001/api/health', returnStatus: true) == 0
                         def frontendHealthy = sh(script: 'docker exec green-frontend curl -f http://localhost', returnStatus: true) == 0
                         if (backendHealthy && frontendHealthy) {
                             success = true
@@ -175,9 +175,9 @@ pipeline {
                     checkout scm
                     if (fileExists('scripts/switch-to-blue.sh')) {
                         sh "bash scripts/switch-to-blue.sh"
-                        if (fileExists('nginx/active.conf')) {
-                            echo "=== nginx/active.conf (after rollback) ==="
-                            echo readFile('nginx/active.conf')
+                        if (fileExists('nginx/conf.d/active.conf')) {
+                            echo "=== nginx/conf.d/active.conf (after rollback) ==="
+                            echo readFile('nginx/conf.d/active.conf')
                         }
                     } else {
                         echo "scripts/switch-to-blue.sh not found, skipping rollback"
