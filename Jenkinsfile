@@ -117,7 +117,7 @@ pipeline {
             steps {
                 echo "Running pre-switch health checks on green..."
                 script {
-                    def backendHealthy = sh(script: 'docker exec green-backend curl -f http://localhost:3111/api/health', returnStatus: true) == 0
+                    def backendHealthy = sh(script: 'docker exec green-backend curl -f http://localhost:3001/api/health', returnStatus: true) == 0
                     def frontendHealthy = sh(script: 'docker exec green-frontend curl -f http://localhost', returnStatus: true) == 0
 
                     if (!backendHealthy || !frontendHealthy) {
