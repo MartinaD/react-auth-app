@@ -4,13 +4,14 @@
 services:
   backend:
     image: ghcr.io/${GHCR_OWNER}/react-auth-backend:${IMAGE_TAG:-develop}
-    container_name: react-auth-backend
+    platform: linux/amd64
+    container_name: reactauth-${ENVIRONMENT:-dev}-backend
     ports:
-      - "3001:3001"
+      - "${HOST_BACKEND_PORT:-3001}:3001"
     labels:
       - "com.docker.compose.service=backend"
-      - "app.url=http://localhost:3001"
-      - "app.port=3001"
+      - "app.url=http://localhost:${HOST_BACKEND_PORT:-3001}"
+      - "app.port=${HOST_BACKEND_PORT:-3001}"
     environment:
       - PORT=3001
       - NODE_ENV=production
@@ -28,9 +29,10 @@ services:
 
   frontend:
     image: ghcr.io/${GHCR_OWNER}/react-auth-frontend:${IMAGE_TAG:-develop}
-    container_name: react-auth-frontend
+    platform: linux/amd64
+    container_name: reactauth-${ENVIRONMENT:-dev}-frontend
     ports:
-      - "80:80"
+      - "${HOST_FRONTEND_PORT:-80}:80"
     environment:
       - VITE_API_URL=${PUBLIC_API_URL:-http://localhost:3001}
     depends_on:
@@ -38,8 +40,8 @@ services:
     restart: unless-stopped
     labels:
       - "com.docker.compose.service=frontend"
-      - "app.url=http://localhost:80"
-      - "app.port=80"
+      - "app.url=http://localhost:${HOST_FRONTEND_PORT:-80}"
+      - "app.port=${HOST_FRONTEND_PORT:-80}"
 
 volumes:
   backend-data:
