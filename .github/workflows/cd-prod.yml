@@ -1,48 +1,56 @@
-# Continuous deployment — production
-# Prod stack: UI on host port 8088, API on 3002
-
+# Runs only after the "CI" workflow succeeds on a push to `main` (includes merge commits).
+# Direct pushes to main no longer trigger CD alone — CI must pass first.
 
 name: CD — Production
 
 on:
-  push:
-    branches:
-      - main
+  workflow_run:
+    workflows: ["CI"]
+    types:
+      - completed
 
 permissions:
   contents: read
   packages: write
+  actions: read
 
 jobs:
   build-backend:
     name: Build & push backend
+    if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' && github.event.workflow_run.head_branch == 'main' }}
     uses: ./.github/workflows/build_and_push.yml
     with:
       service: backend
       image_name: react-auth-backend
-      tags_csv: latest,main,${{ github.sha }}
+      tags_csv: latest,main,${{ github.event.workflow_run.head_sha }}
       push: true
+      checkout_ref: ${{ github.event.workflow_run.head_sha }}
     secrets: inherit
 
   build-frontend:
     name: Build & push frontend
+    if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' && github.event.workflow_run.head_branch == 'main' }}
     uses: ./.github/workflows/build_and_push.yml
     with:
       service: frontend
       image_name: react-auth-frontend
-      tags_csv: latest,main,${{ github.sha }}
+      tags_csv: latest,main,${{ github.event.workflow_run.head_sha }}
       push: true
       vite_api_url: ${{ vars.PROD_VITE_API_URL || 'http://localhost:3002' }}
+      checkout_ref: ${{ github.event.workflow_run.head_sha }}
     secrets: inherit
 
   deploy:
     name: Deploy (production)
+    if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' && github.event.workflow_run.head_branch == 'main' }}
     needs: [build-backend, build-frontend]
     runs-on: ubuntu-latest
     environment: production
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
 
       - name: Lowercase GHCR owner
         id: vars
