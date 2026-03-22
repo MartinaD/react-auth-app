@@ -1,0 +1,181 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+      - "feature/**"
+      - "release-*"
+      - "hotfix/**"
+  pull_request:
+    branches:
+      - main
+      - develop
+      - "release-*"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref == 'refs/heads/main' && github.run_id || github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' && github.ref != 'refs/heads/develop' }}
+
+permissions:
+  contents: read
+
+jobs:
+  pre_checks:
+    name: Pre-checks
+    runs-on: ubuntu-latest
+    outputs:
+      run_backend: ${{ steps.affected.outputs.run_backend }}
+      run_frontend: ${{ steps.affected.outputs.run_frontend }}
+      image_tag: ${{ steps.image_tag.outputs.image_tag }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Conventional commit PR title
+        if: github.event_name == 'pull_request'
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          if [[ "$TITLE" =~ ^(feat|fix|docs|style|refactor|perf|test|chore|build|ci|revert|hotfix)(\(.+\))?:[[:space:]].+$ ]]; then
+            echo "PR title matches conventional commits"
+          else
+            echo "::error::PR title must follow conventional commits, e.g. feat: add login"
+            exit 1
+          fi
+
+      - name: Get changed files
+        id: changed-files
+        uses: tj-actions/changed-files@v45
+        with:
+          json: "true"
+          dir_names_max_depth: 2
+
+      - name: Affected services
+        id: affected
+        env:
+          FILES_JSON: ${{ steps.changed-files.outputs.all_changed_and_modified_files }}
+        run: |
+          set -euo pipefail
+          if ! echo "$FILES_JSON" | jq empty 2>/dev/null; then
+            echo "run_backend=true" >> "$GITHUB_OUTPUT"
+            echo "run_frontend=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          COUNT=$(echo "$FILES_JSON" | jq "length")
+          if [ "$COUNT" -eq 0 ]; then
+            echo "run_backend=true" >> "$GITHUB_OUTPUT"
+            echo "run_frontend=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          REBUILD=$(echo "$FILES_JSON" | jq '[.[] | select(test("\\.github/|(^|/)Dockerfile|docker-compose"))] | length')
+          if [ "$REBUILD" -gt 0 ]; then
+            echo "run_backend=true" >> "$GITHUB_OUTPUT"
+            echo "run_frontend=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          BE=$(echo "$FILES_JSON" | jq '[.[] | select(test("^backend/"))] | length')
+          FE=$(echo "$FILES_JSON" | jq '[.[] | select(test("^frontend/"))] | length')
+          if [ "$BE" -gt 0 ]; then RB=true; else RB=false; fi
+          if [ "$FE" -gt 0 ]; then RF=true; else RF=false; fi
+          if [ "$RB" = false ] && [ "$RF" = false ]; then
+            RB=true
+            RF=true
+          fi
+          echo "run_backend=$RB" >> "$GITHUB_OUTPUT"
+          echo "run_frontend=$RF" >> "$GITHUB_OUTPUT"
+
+      - name: Image tag
+        id: image_tag
+        run: |
+          TAG="${GITHUB_SHA:0:7}_${GITHUB_RUN_NUMBER}"
+          echo "image_tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "$TAG" > image_tag.txt
+
+      - name: Upload image tag artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: image-tag
+          path: image_tag.txt
+          if-no-files-found: error
+
+  test:
+    name: Test (${{ matrix.service }})
+    needs: pre_checks
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [backend, frontend]
+    if: >-
+      (matrix.service == 'backend' && needs.pre_checks.outputs.run_backend == 'true') ||
+      (matrix.service == 'frontend' && needs.pre_checks.outputs.run_frontend == 'true')
+    defaults:
+      run:
+        working-directory: ${{ matrix.service }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: ${{ matrix.service }}/package-lock.json
+
+      - name: Install dependencies (backend)
+        if: matrix.service == 'backend'
+        run: npm ci
+
+      - name: Install dependencies (frontend)
+        if: matrix.service == 'frontend'
+        run: npm ci --legacy-peer-deps
+
+      - name: Test
+        run: npm test
+
+  docker_verify:
+    name: Docker verify (${{ matrix.service }})
+    needs: [pre_checks, test]
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [backend, frontend]
+    if: >-
+      needs.pre_checks.result == 'success'
+      && (needs.test.result == 'success' || needs.test.result == 'skipped')
+      && (
+        (matrix.service == 'backend' && needs.pre_checks.outputs.run_backend == 'true')
+        || (matrix.service == 'frontend' && needs.pre_checks.outputs.run_frontend == 'true')
+      )
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build image (backend)
+        if: matrix.service == 'backend'
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          push: false
+          load: true
+          tags: react-auth-backend:ci
+
+      - name: Build image (frontend)
+        if: matrix.service == 'frontend'
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          push: false
+          load: true
+          tags: react-auth-frontend:ci
+          build-args: |
+            VITE_API_URL=http://localhost:3001
