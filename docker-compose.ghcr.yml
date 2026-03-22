@@ -1,6 +1,8 @@
 # Pull application images from GitHub Container Registry (GHCR).
 # GHCR_OWNER and IMAGE_TAG are defined in CD workflows
 
+name: reactauth-${ENVIRONMENT:-dev}
+
 services:
   backend:
     image: ghcr.io/${GHCR_OWNER}/react-auth-backend:${IMAGE_TAG:-develop}
