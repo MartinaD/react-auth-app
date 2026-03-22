@@ -1,4 +1,6 @@
 # Continuous deployment — development
+# Set DEV_VITE_API_URL as a Repository variable: Settings → Secrets and variables → Actions → Variables
+# (secrets cannot be used in `with:` for reusable workflow calls.)
 
 name: CD — Development
 
@@ -31,7 +33,7 @@ jobs:
       image_name: react-auth-frontend
       tags_csv: develop,${{ github.sha }}
       push: true
-      vite_api_url: ${{ secrets.DEV_VITE_API_URL || 'http://localhost:3001' }}
+      vite_api_url: ${{ vars.DEV_VITE_API_URL || 'http://localhost:3001' }}
     secrets: inherit
 
   deploy:
