@@ -102,20 +102,14 @@ jobs:
           path: image_tag.txt
           if-no-files-found: error
 
-  test:
-    name: Test (${{ matrix.service }})
+  test_backend:
+    name: Test (backend)
     needs: pre_checks
+    if: needs.pre_checks.outputs.run_backend == 'true'
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        service: [backend, frontend]
-    if: >-
-      (matrix.service == 'backend' && needs.pre_checks.outputs.run_backend == 'true') ||
-      (matrix.service == 'frontend' && needs.pre_checks.outputs.run_frontend == 'true')
     defaults:
       run:
-        working-directory: ${{ matrix.service }}
+        working-directory: backend
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -125,34 +119,44 @@ jobs:
         with:
           node-version: "20"
           cache: npm
-          cache-dependency-path: ${{ matrix.service }}/package-lock.json
+          cache-dependency-path: backend/package-lock.json
 
-      - name: Install dependencies (backend)
-        if: matrix.service == 'backend'
+      - name: Install dependencies
         run: npm ci
 
-      - name: Install dependencies (frontend)
-        if: matrix.service == 'frontend'
+      - name: Test
+        run: npm test
+
+  test_frontend:
+    name: Test (frontend)
+    needs: pre_checks
+    if: needs.pre_checks.outputs.run_frontend == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
         run: npm ci --legacy-peer-deps
 
       - name: Test
         run: npm test
 
-  docker_verify:
-    name: Docker verify (${{ matrix.service }})
-    needs: [pre_checks, test]
+  docker_verify_backend:
+    name: Docker verify (backend)
+    needs: [pre_checks, test_backend]
+    if: needs.test_backend.result == 'success'
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        service: [backend, frontend]
-    if: >-
-      needs.pre_checks.result == 'success'
-      && (needs.test.result == 'success' || needs.test.result == 'skipped')
-      && (
-        (matrix.service == 'backend' && needs.pre_checks.outputs.run_backend == 'true')
-        || (matrix.service == 'frontend' && needs.pre_checks.outputs.run_frontend == 'true')
-      )
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -160,8 +164,7 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Build image (backend)
-        if: matrix.service == 'backend'
+      - name: Build image
         uses: docker/build-push-action@v6
         with:
           context: ./backend
@@ -169,8 +172,19 @@ jobs:
           load: true
           tags: react-auth-backend:ci
 
-      - name: Build image (frontend)
-        if: matrix.service == 'frontend'
+  docker_verify_frontend:
+    name: Docker verify (frontend)
+    needs: [pre_checks, test_frontend]
+    if: needs.test_frontend.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build image
         uses: docker/build-push-action@v6
         with:
           context: ./frontend
