@@ -1,0 +1,64 @@
+# Continuous deployment — development
+
+name: CD — Development
+
+on:
+  push:
+    branches:
+      - develop
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build-backend:
+    name: Build & push backend
+    uses: ./.github/workflows/build_and_push.yml
+    with:
+      service: backend
+      image_name: react-auth-backend
+      tags_csv: develop,${{ github.sha }}
+      push: true
+      vite_api_url: http://localhost:3001
+    secrets: inherit
+
+  build-frontend:
+    name: Build & push frontend
+    uses: ./.github/workflows/build_and_push.yml
+    with:
+      service: frontend
+      image_name: react-auth-frontend
+      tags_csv: develop,${{ github.sha }}
+      push: true
+      vite_api_url: ${{ secrets.DEV_VITE_API_URL || 'http://localhost:3001' }}
+    secrets: inherit
+
+  deploy:
+    name: Deploy (development)
+    needs: [build-backend, build-frontend]
+    runs-on: ubuntu-latest
+    environment: development
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Lowercase GHCR owner
+        id: vars
+        run: echo "owner=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
+
+      - name: Validate compose (GHCR)
+        env:
+          GHCR_OWNER: ${{ steps.vars.outputs.owner }}
+          IMAGE_TAG: develop
+        run: docker compose -f docker-compose.ghcr.yml config
+
+      - name: Deployment summary
+        run: |
+          O="${{ steps.vars.outputs.owner }}"
+          echo "Images: ghcr.io/${O}/react-auth-backend:develop (and :${GITHUB_SHA})"
+          echo "        ghcr.io/${O}/react-auth-frontend:develop (and :${GITHUB_SHA})"
+          echo "On a host with this repo (or compose file), run:"
+          echo "  export GHCR_OWNER=${O} IMAGE_TAG=develop"
+          echo "  docker compose -f docker-compose.ghcr.yml pull && docker compose -f docker-compose.ghcr.yml up -d"
+          echo "Use a PAT with read:packages for docker login ghcr.io if images are private."
