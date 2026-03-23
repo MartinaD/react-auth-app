@@ -14,6 +14,8 @@ on:
       - develop
       - "release-*"
 
+# Concurrency group prevents multiple CI runs for the same PR or branch (same SHA)
+# For main branch, each run has a unique run_id. For other branches, each PR has a unique number
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref == 'refs/heads/main' && github.run_id || github.event.pull_request.number || github.ref }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' && github.ref != 'refs/heads/develop' }}
@@ -22,6 +24,7 @@ permissions:
   contents: read
 
 jobs:
+  # Conventional commit PR title validation
   pre_checks:
     name: Pre-checks
     runs-on: ubuntu-latest
@@ -54,6 +57,7 @@ jobs:
           json: "true"
           dir_names_max_depth: 2
 
+      # Determine which services need to be tested based on changed files
       - name: Affected services
         id: affected
         env:
@@ -88,6 +92,7 @@ jobs:
           echo "run_backend=$RB" >> "$GITHUB_OUTPUT"
           echo "run_frontend=$RF" >> "$GITHUB_OUTPUT"
 
+      # Generate image tag for the build and push to artifact
       - name: Image tag
         id: image_tag
         run: |
@@ -101,7 +106,7 @@ jobs:
           name: image-tag
           path: image_tag.txt
           if-no-files-found: error
-
+  # Tests are run in parallel
   test_backend:
     name: Test (backend)
     needs: pre_checks
@@ -152,6 +157,7 @@ jobs:
       - name: Test
         run: npm test
 
+  # Docker verify is run after the tests are successful
   docker_verify_backend:
     name: Docker verify (backend)
     needs: [pre_checks, test_backend]
