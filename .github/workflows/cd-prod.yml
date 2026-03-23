@@ -1,5 +1,5 @@
-# Runs only after the "CI" workflow succeeds on a push to `main` (includes merge commits).
-# Direct pushes to main no longer trigger CD alone — CI must pass first.
+# Runs only after the "CI" workflow succeeds on a push to `main` (merge or direct push).
+# Does NOT run for pull_request CI — e.g. PR develop→main must be merged first; then push triggers CI and CD.
 
 name: CD — Production
 
@@ -20,15 +20,8 @@ jobs:
     if: >-
       ${{
         github.event.workflow_run.conclusion == 'success' &&
-        (
-          (github.event.workflow_run.event == 'push' &&
-            (github.event.workflow_run.head_branch == 'main' || github.event.workflow_run.head_branch == 'refs/heads/main'))
-          ||
-          (github.event.workflow_run.event == 'pull_request' &&
-            github.event.workflow_run.pull_requests[0] != null &&
-            github.event.workflow_run.pull_requests[0].base.ref == 'main' &&
-            github.event.workflow_run.head_repository.full_name == github.repository)
-        )
+        github.event.workflow_run.event == 'push' &&
+        (github.event.workflow_run.head_branch == 'main' || github.event.workflow_run.head_branch == 'refs/heads/main')
       }}
     uses: ./.github/workflows/build_and_push.yml
     with:
@@ -44,15 +37,8 @@ jobs:
     if: >-
       ${{
         github.event.workflow_run.conclusion == 'success' &&
-        (
-          (github.event.workflow_run.event == 'push' &&
-            (github.event.workflow_run.head_branch == 'main' || github.event.workflow_run.head_branch == 'refs/heads/main'))
-          ||
-          (github.event.workflow_run.event == 'pull_request' &&
-            github.event.workflow_run.pull_requests[0] != null &&
-            github.event.workflow_run.pull_requests[0].base.ref == 'main' &&
-            github.event.workflow_run.head_repository.full_name == github.repository)
-        )
+        github.event.workflow_run.event == 'push' &&
+        (github.event.workflow_run.head_branch == 'main' || github.event.workflow_run.head_branch == 'refs/heads/main')
       }}
     uses: ./.github/workflows/build_and_push.yml
     with:
@@ -69,15 +55,8 @@ jobs:
     if: >-
       ${{
         github.event.workflow_run.conclusion == 'success' &&
-        (
-          (github.event.workflow_run.event == 'push' &&
-            (github.event.workflow_run.head_branch == 'main' || github.event.workflow_run.head_branch == 'refs/heads/main'))
-          ||
-          (github.event.workflow_run.event == 'pull_request' &&
-            github.event.workflow_run.pull_requests[0] != null &&
-            github.event.workflow_run.pull_requests[0].base.ref == 'main' &&
-            github.event.workflow_run.head_repository.full_name == github.repository)
-        )
+        github.event.workflow_run.event == 'push' &&
+        (github.event.workflow_run.head_branch == 'main' || github.event.workflow_run.head_branch == 'refs/heads/main')
       }}
     needs: [build-backend, build-frontend]
     runs-on: ubuntu-latest
