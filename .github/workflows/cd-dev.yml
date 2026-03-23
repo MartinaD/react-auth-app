@@ -8,8 +8,6 @@ on:
     workflows: ["CI"]
     types:
       - completed
-    branches:
-      - develop
 
 permissions:
   contents: read
@@ -19,7 +17,7 @@ permissions:
 jobs:
   build-backend:
     name: Build & push backend
-    if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' }}
+    if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' && github.event.workflow_run.head_branch == 'develop' }}
     uses: ./.github/workflows/build_and_push.yml
     with:
       service: backend
@@ -31,7 +29,7 @@ jobs:
 
   build-frontend:
     name: Build & push frontend
-    if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' }}
+    if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' && github.event.workflow_run.head_branch == 'develop'}}
     uses: ./.github/workflows/build_and_push.yml
     with:
       service: frontend
@@ -44,7 +42,7 @@ jobs:
 
   deploy:
     name: Deploy (development)
-    if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' }}
+    if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' && github.event.workflow_run.head_branch == 'develop' }}
     needs: [build-backend, build-frontend]
     runs-on: ubuntu-latest
     environment: development
