@@ -1,5 +1,7 @@
-# Runs only after the "CI" workflow succeeds on a push to `main` (includes merge commits).
-# Direct pushes to main no longer trigger CD alone — CI must pass first.
+# After successful CI: deploy prod when the change targets `main` — push to `main` or PR into `main`
+# (same-repo PRs only). Fork PRs are skipped via head_repository check.
+#
+# GitHub: `workflow_run` workflows only run if this file exists on the DEFAULT branch.
 
 name: CD — Production
 
@@ -8,8 +10,6 @@ on:
     workflows: ["CI"]
     types:
       - completed
-    branches:
-      - main
 
 permissions:
   contents: read
@@ -19,7 +19,20 @@ permissions:
 jobs:
   build-backend:
     name: Build & push backend
-    if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' }}
+    if: >-
+      ${{
+        github.event.workflow_run.conclusion == 'success' &&
+        (
+          (github.event.workflow_run.event == 'push' &&
+            (github.event.workflow_run.head_branch == 'main' || github.event.workflow_run.head_branch == 'refs/heads/main'))
+          ||
+          (github.event.workflow_run.event == 'pull_request' &&
+            github.event.workflow_run.pull_requests != null &&
+            length(github.event.workflow_run.pull_requests) > 0 &&
+            github.event.workflow_run.pull_requests[0].base.ref == 'main' &&
+            github.event.workflow_run.head_repository.full_name == github.repository)
+        )
+      }}
     uses: ./.github/workflows/build_and_push.yml
     with:
       service: backend
@@ -31,7 +44,20 @@ jobs:
 
   build-frontend:
     name: Build & push frontend
-    if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' }}
+    if: >-
+      ${{
+        github.event.workflow_run.conclusion == 'success' &&
+        (
+          (github.event.workflow_run.event == 'push' &&
+            (github.event.workflow_run.head_branch == 'main' || github.event.workflow_run.head_branch == 'refs/heads/main'))
+          ||
+          (github.event.workflow_run.event == 'pull_request' &&
+            github.event.workflow_run.pull_requests != null &&
+            length(github.event.workflow_run.pull_requests) > 0 &&
+            github.event.workflow_run.pull_requests[0].base.ref == 'main' &&
+            github.event.workflow_run.head_repository.full_name == github.repository)
+        )
+      }}
     uses: ./.github/workflows/build_and_push.yml
     with:
       service: frontend
@@ -44,7 +70,20 @@ jobs:
 
   deploy:
     name: Deploy (production)
-    if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' }}
+    if: >-
+      ${{
+        github.event.workflow_run.conclusion == 'success' &&
+        (
+          (github.event.workflow_run.event == 'push' &&
+            (github.event.workflow_run.head_branch == 'main' || github.event.workflow_run.head_branch == 'refs/heads/main'))
+          ||
+          (github.event.workflow_run.event == 'pull_request' &&
+            github.event.workflow_run.pull_requests != null &&
+            length(github.event.workflow_run.pull_requests) > 0 &&
+            github.event.workflow_run.pull_requests[0].base.ref == 'main' &&
+            github.event.workflow_run.head_repository.full_name == github.repository)
+        )
+      }}
     needs: [build-backend, build-frontend]
     runs-on: ubuntu-latest
     environment: production
