@@ -1,47 +1,56 @@
-# Continuous deployment — development
-# Dev stack: UI on host port 80, API on 3001 (defaults in docker-compose.ghcr.yml)
+# Runs only after the "CI" workflow succeeds on a push to `develop` (not on PR CI).
+# Direct pushes to develop no longer trigger CD alone — CI must pass first.
 
 name: CD — Development
 
 on:
-  push:
-    branches:
-      - develop
+  workflow_run:
+    workflows: ["CI"]
+    types:
+      - completed
 
 permissions:
   contents: read
   packages: write
+  actions: read
 
 jobs:
   build-backend:
     name: Build & push backend
+    if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' && github.event.workflow_run.head_branch == 'develop' }}
     uses: ./.github/workflows/build_and_push.yml
     with:
       service: backend
       image_name: react-auth-backend
-      tags_csv: develop,${{ github.sha }}
+      tags_csv: develop,${{ github.event.workflow_run.head_sha }}
       push: true
+      checkout_ref: ${{ github.event.workflow_run.head_sha }}
     secrets: inherit
 
   build-frontend:
     name: Build & push frontend
+    if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' && github.event.workflow_run.head_branch == 'develop'}}
     uses: ./.github/workflows/build_and_push.yml
     with:
       service: frontend
       image_name: react-auth-frontend
-      tags_csv: develop,${{ github.sha }}
+      tags_csv: develop,${{ github.event.workflow_run.head_sha }}
       push: true
       vite_api_url: ${{ vars.DEV_VITE_API_URL || 'http://localhost:3001' }}
+      checkout_ref: ${{ github.event.workflow_run.head_sha }}
     secrets: inherit
 
   deploy:
     name: Deploy (development)
+    if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' && github.event.workflow_run.head_branch == 'develop' }}
     needs: [build-backend, build-frontend]
     runs-on: ubuntu-latest
     environment: development
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
 
       - name: Lowercase GHCR owner
         id: vars
@@ -86,4 +95,4 @@ jobs:
           echo "On your machine (after docker login ghcr.io):"
           echo "  export GHCR_OWNER=${O} IMAGE_TAG=develop ENVIRONMENT=dev HOST_FRONTEND_PORT=80 HOST_BACKEND_PORT=3001"
           echo "  docker compose -f docker-compose.ghcr.yml pull && docker compose -f docker-compose.ghcr.yml up -d"
-          echo "Note: GitHub-hosted runners are ephemeral; this deploy runs on the CI VM, not your laptop. Use self-hosted runner or repeat the export commands locally."
+          echo "Note: GitHub-hosted runners are ephemeral; this deploy runs on the CI VM, not your laptop."

@@ -23,6 +23,11 @@ on:
         required: false
         default: http://localhost:3001
         description: VITE_API_URL build-arg when service is frontend
+      checkout_ref:
+        type: string
+        required: false
+        default: ""
+        description: Git ref to checkout (use workflow_run head_sha when CD runs after CI)
 
 jobs:
   docker:
@@ -33,6 +38,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.checkout_ref || github.sha }}
 
       - name: Lowercase owner for GHCR
         id: vars

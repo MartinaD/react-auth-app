@@ -1,48 +1,97 @@
-# Continuous deployment — production
-# Prod stack: UI on host port 8088, API on 3002
-
+# After successful CI: deploy prod when the change targets `main` — push to `main` or PR into `main`
+# (same-repo PRs only). Fork PRs are skipped via head_repository check.
+#
+# GitHub: `workflow_run` workflows only run if this file exists on the DEFAULT branch.
 
 name: CD — Production
 
 on:
-  push:
-    branches:
-      - main
+  workflow_run:
+    workflows: ["CI"]
+    types:
+      - completed
 
 permissions:
   contents: read
   packages: write
+  actions: read
 
 jobs:
   build-backend:
     name: Build & push backend
+    if: >-
+      ${{
+        github.event.workflow_run.conclusion == 'success' &&
+        (
+          (github.event.workflow_run.event == 'push' &&
+            (github.event.workflow_run.head_branch == 'main' || github.event.workflow_run.head_branch == 'refs/heads/main'))
+          ||
+          (github.event.workflow_run.event == 'pull_request' &&
+            github.event.workflow_run.pull_requests != null &&
+            length(github.event.workflow_run.pull_requests) > 0 &&
+            github.event.workflow_run.pull_requests[0].base.ref == 'main' &&
+            github.event.workflow_run.head_repository.full_name == github.repository)
+        )
+      }}
     uses: ./.github/workflows/build_and_push.yml
     with:
       service: backend
       image_name: react-auth-backend
-      tags_csv: latest,main,${{ github.sha }}
+      tags_csv: latest,main,${{ github.event.workflow_run.head_sha }}
       push: true
+      checkout_ref: ${{ github.event.workflow_run.head_sha }}
     secrets: inherit
 
   build-frontend:
     name: Build & push frontend
+    if: >-
+      ${{
+        github.event.workflow_run.conclusion == 'success' &&
+        (
+          (github.event.workflow_run.event == 'push' &&
+            (github.event.workflow_run.head_branch == 'main' || github.event.workflow_run.head_branch == 'refs/heads/main'))
+          ||
+          (github.event.workflow_run.event == 'pull_request' &&
+            github.event.workflow_run.pull_requests != null &&
+            length(github.event.workflow_run.pull_requests) > 0 &&
+            github.event.workflow_run.pull_requests[0].base.ref == 'main' &&
+            github.event.workflow_run.head_repository.full_name == github.repository)
+        )
+      }}
     uses: ./.github/workflows/build_and_push.yml
     with:
       service: frontend
       image_name: react-auth-frontend
-      tags_csv: latest,main,${{ github.sha }}
+      tags_csv: latest,main,${{ github.event.workflow_run.head_sha }}
       push: true
       vite_api_url: ${{ vars.PROD_VITE_API_URL || 'http://localhost:3002' }}
+      checkout_ref: ${{ github.event.workflow_run.head_sha }}
     secrets: inherit
 
   deploy:
     name: Deploy (production)
+    if: >-
+      ${{
+        github.event.workflow_run.conclusion == 'success' &&
+        (
+          (github.event.workflow_run.event == 'push' &&
+            (github.event.workflow_run.head_branch == 'main' || github.event.workflow_run.head_branch == 'refs/heads/main'))
+          ||
+          (github.event.workflow_run.event == 'pull_request' &&
+            github.event.workflow_run.pull_requests != null &&
+            length(github.event.workflow_run.pull_requests) > 0 &&
+            github.event.workflow_run.pull_requests[0].base.ref == 'main' &&
+            github.event.workflow_run.head_repository.full_name == github.repository)
+        )
+      }}
     needs: [build-backend, build-frontend]
     runs-on: ubuntu-latest
     environment: production
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
 
       - name: Lowercase GHCR owner
         id: vars
