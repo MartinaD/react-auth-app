@@ -1,7 +1,5 @@
-# After successful CI: deploy prod when the change targets `main` — push to `main` or PR into `main`
-# (same-repo PRs only). Fork PRs are skipped via head_repository check.
-#
-# GitHub: `workflow_run` workflows only run if this file exists on the DEFAULT branch.
+# Runs only after the "CI" workflow succeeds on a push to `main` (includes merge commits).
+# Direct pushes to main no longer trigger CD alone — CI must pass first.
 
 name: CD — Production
 
@@ -27,8 +25,7 @@ jobs:
             (github.event.workflow_run.head_branch == 'main' || github.event.workflow_run.head_branch == 'refs/heads/main'))
           ||
           (github.event.workflow_run.event == 'pull_request' &&
-            github.event.workflow_run.pull_requests != null &&
-            length(github.event.workflow_run.pull_requests) > 0 &&
+            github.event.workflow_run.pull_requests[0] != null &&
             github.event.workflow_run.pull_requests[0].base.ref == 'main' &&
             github.event.workflow_run.head_repository.full_name == github.repository)
         )
@@ -52,8 +49,7 @@ jobs:
             (github.event.workflow_run.head_branch == 'main' || github.event.workflow_run.head_branch == 'refs/heads/main'))
           ||
           (github.event.workflow_run.event == 'pull_request' &&
-            github.event.workflow_run.pull_requests != null &&
-            length(github.event.workflow_run.pull_requests) > 0 &&
+            github.event.workflow_run.pull_requests[0] != null &&
             github.event.workflow_run.pull_requests[0].base.ref == 'main' &&
             github.event.workflow_run.head_repository.full_name == github.repository)
         )
@@ -78,8 +74,7 @@ jobs:
             (github.event.workflow_run.head_branch == 'main' || github.event.workflow_run.head_branch == 'refs/heads/main'))
           ||
           (github.event.workflow_run.event == 'pull_request' &&
-            github.event.workflow_run.pull_requests != null &&
-            length(github.event.workflow_run.pull_requests) > 0 &&
+            github.event.workflow_run.pull_requests[0] != null &&
             github.event.workflow_run.pull_requests[0].base.ref == 'main' &&
             github.event.workflow_run.head_repository.full_name == github.repository)
         )
