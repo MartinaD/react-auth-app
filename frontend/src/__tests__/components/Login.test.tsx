@@ -34,7 +34,7 @@ describe('Login Component', () => {
   it('should render login form', () => {
     renderLogin();
 
-    expect(screen.getByText('Welcome Back From Develop')).toBeInTheDocument();
+    expect(screen.getByText('Welcome Back')).toBeInTheDocument();
     expect(screen.getByText('Sign in to your account')).toBeInTheDocument();
     expect(screen.getByLabelText(/email/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/password/i)).toBeInTheDocument();
